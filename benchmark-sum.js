@@ -67,6 +67,9 @@ suite.add('thousand', function() {
         deferred.resolve();
     }
 })
+.on('start', function() {
+  console.debug("Running benchmarks on %i CPUs: %o", os.cpus().length, os.cpus());
+})
 .on('cycle', function(event) {
   console.log(String(event.target));
 })
