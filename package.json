@@ -1,7 +1,6 @@
 {
   "dependencies": {
-    "benchmark": "^2.1.4",
-    "node-worker-threads-pool": "^1.5.1"
+    "benchmark": "^2.1.4"
   },
   "type": "module"
 }

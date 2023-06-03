@@ -1,41 +1,10 @@
 
 import pkg from "benchmark";
 import os from "os";
-import pools from "node-worker-threads-pool";
+import { Worker } from "worker_threads";
 
 const { Suite } = pkg;
-const { StaticPool } = pools;
-
 const suite = new Suite;
-
-function checkSum(lo, hi) {
-  let sum = 0;
-  for (let i = lo; i <= hi; i++) {
-    sum += i % 10;
-  }
-  return sum;
-}
-
-async function checkSumThreads(lo, hi) {
-  const threadCount = os.cpus().length;
-  const batchSize = Math.floor((hi - lo + 1) / threadCount);
-  let start = lo;
-  const promises = [];
-  const pool = new StaticPool({ size: threadCount, task: "./worker.js" });
-  for (let i = 0; i < threadCount - 1; i++) {
-    let end = start + batchSize - 1;
-    promises.push(pool.exec({ min: start, max: end }));
-    start = end + 1;
-  }
-  promises.push(pool.exec({ min: start, max: hi }));
-
-  return Promise.all(promises).then((values) => {
-    let sum = 0;
-    values.forEach(num => { sum += num });
-    pool.destroy();
-    return sum;
-  });
-}
 
 suite.add('thousand', function() {
   checkSum(1, 1_000)
@@ -77,3 +46,47 @@ suite.add('thousand', function() {
     // console.log('Fastest is ' + this.filter('fastest').map('name'));
   })
   .run({ 'async': true });
+
+async function checkSumThreads(lo, hi) {
+  const threadCount = os.cpus().length;
+  const batchSize = Math.floor((hi - lo + 1) / threadCount);
+  let start = lo;
+  const promises = [];
+  for (let i = 0; i < threadCount - 1; i++) {
+    let end = start + batchSize - 1;
+    promises.push(createPromise({ lo: start, hi: end }));
+    start = end + 1;
+  }
+  promises.push(createPromise({ lo: start, hi: hi }));
+
+  return Promise.all(promises).then((values) => {
+    let sum = 0;
+    values.forEach(num => { sum += num });
+    return sum;
+  });
+}
+
+function createPromise(numberRange) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker("./worker.js");
+    worker.postMessage({ min: numberRange.lo, max: numberRange.hi });
+    worker.once('message', res => {
+      worker.terminate();
+      resolve(res);
+    });
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Worker stopped with exit code ${code}`));
+      }
+    });
+  });
+}
+
+function checkSum(lo, hi) {
+  let sum = 0;
+  for (let i = lo; i <= hi; i++) {
+    sum += i % 10;
+  }
+  return sum;
+}
